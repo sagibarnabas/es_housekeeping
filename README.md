@@ -3,7 +3,7 @@
 A small CLI tool for reporting on and cleaning up stale Elasticsearch indices.
 
 ## Install & run (fresh machine)
-  
+
 ```bash
 git clone https://github.com/sagibarnabas/es_housekeeping.git
 cd es_housekeeping
@@ -78,7 +78,7 @@ $ python3 es_housekeeping.py report --pattern "logs-*" --json
 ```bash
 $ python3 es_housekeeping.py cleanup --pattern "logs-*" --older-than-days 30
 2 old index(es) matching 'logs-*' older than 30 days:
-index            health      docs_count  store_size      age_in_days  ilm_managed
+index            health      docs_count  primary_store_size      age_in_days  ilm_managed
 ---------------  --------  ------------  ------------  -------------  -------------
 logs-2025.06.20  green              500  1.2mb                   400  False
 logs-2026.01.06  green              800  2.1mb                   200  False
