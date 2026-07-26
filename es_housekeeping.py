@@ -20,6 +20,18 @@ def cleanup(args):
     if not args.apply:
         print("\nDRY-RUN: nothing deleted. Re-run with --apply to actually delete these.")
         return
+    elif args.apply:
+        answer = input(f"\nThis will PERMANENTLY delete {len(old_entries)} index(es) listed above. This cannot be undone. Type 'yes' to confirm: ")
+        if answer.strip().lower() != "yes":
+            print("Aborted. Nothing deleted.")
+            return
+        elif answer.strip().lower() == "yes":
+            print("\nAPPLY: deleting...")
+            for row in old_entries:
+                name = row["index"]
+                es_request("DELETE", f"/{name}")
+                print(f"  deleted {name}")
+            return
 
 def age_days(index_name: str, creation_date_ms: int) -> int:
     ## Safe with regex, as the format is kind of fix
