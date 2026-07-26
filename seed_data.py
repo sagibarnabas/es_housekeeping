@@ -49,6 +49,29 @@ STATIC_INDICES = {
     "reference-countries": 250,
 }
 
+# A minimal ILM policy we attach to a couple of indices so the housekeeping
+# tool sees a realistic mix of managed=True / managed=False, not all False.
+ILM_POLICY_NAME = "housekeeping-demo-policy"
+ILM_POLICY_BODY = {
+    "policy": {
+        "phases": {
+            "hot": {
+                "min_age": "0ms",
+                "actions": {"rollover": {"max_age": "365d", "max_primary_shard_size": "50gb"}},
+            },
+            "delete": {
+                "min_age": "90d",
+                "actions": {"delete": {}},
+            },
+        }
+    }
+}
+
+# Which log indices (by days_ago) get the ILM policy attached at creation.
+# The "fresh" (2d) and "today" (0d) ones — realistic candidates for an
+# actively-managed hot-tier policy.
+MANAGED_DAYS_AGO = {2, 0}
+
 SERVICES = ["auth", "billing", "gateway", "worker", "frontend"]
 LEVELS = ["INFO", "INFO", "INFO", "WARN", "ERROR"]
 
@@ -79,18 +102,34 @@ def reset() -> None:
     print(f"Deleted: {', '.join(idx)}")
 
 
-def _create_index(name: str, days_ago: int) -> None:
+def _ensure_ilm_policy() -> None:
+    r = requests.put(
+        f"{ES_URL}/_ilm/policy/{ILM_POLICY_NAME}",
+        json=ILM_POLICY_BODY,
+        timeout=30,
+    )
+    if not r.ok:
+        print(f"  ! failed to create ILM policy {ILM_POLICY_NAME}: {r.status_code} {r.text}")
+
+
+def _create_index(name: str, days_ago: int, managed: bool = False) -> None:
     created = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days_ago)
     creation_ms = int(created.timestamp() * 1000)
 
+    index_settings = {"number_of_shards": 1, "number_of_replicas": 0,
+                       "creation_date": creation_ms}
+    if managed:
+        index_settings["lifecycle"] = {"name": ILM_POLICY_NAME}
+
     # Attempt to backdate creation_date; fall back if the version rejects it.
-    body = {"settings": {"index": {"number_of_shards": 1, "number_of_replicas": 0,
-                                   "creation_date": creation_ms}}}
+    body = {"settings": {"index": index_settings}}
     r = requests.put(f"{ES_URL}/{name}", json=body, timeout=30)
     if not r.ok:
+        fallback_settings = {"number_of_shards": 1, "number_of_replicas": 0}
+        if managed:
+            fallback_settings["lifecycle"] = {"name": ILM_POLICY_NAME}
         r = requests.put(f"{ES_URL}/{name}",
-                         json={"settings": {"index": {"number_of_shards": 1,
-                                                      "number_of_replicas": 0}}},
+                         json={"settings": {"index": fallback_settings}},
                          timeout=30)
         if not r.ok:
             print(f"  ! failed to create {name}: {r.status_code} {r.text}")
@@ -123,13 +162,16 @@ def _bulk_index(name: str, count: int, base_day: dt.datetime) -> None:
 
 def seed() -> None:
     _check_cluster()
+    _ensure_ilm_policy()
     now = dt.datetime.now(dt.timezone.utc)
 
     for days_ago, count in LOG_INDICES:
         day = now - dt.timedelta(days=days_ago)
         name = f"logs-{day:%Y.%m.%d}"
-        print(f"Creating {name} (~{count} docs, {days_ago}d old)")
-        _create_index(name, days_ago)
+        managed = days_ago in MANAGED_DAYS_AGO
+        tag = " [ILM managed]" if managed else ""
+        print(f"Creating {name} (~{count} docs, {days_ago}d old){tag}")
+        _create_index(name, days_ago, managed=managed)
         _bulk_index(name, count, day.replace(hour=0, minute=0, second=0, microsecond=0))
 
     for name, count in STATIC_INDICES.items():
