@@ -8,7 +8,18 @@ import datetime as dt
 from elastic_api import es_request
 
 def cleanup(args):
-    return
+    data=fetch_data(args.pattern)
+    old_entries = [row for row in data if row["age_in_days"] >= args.older_than_days]
+    if not old_entries:
+        print(f"No indices matching {args.pattern!r} older than {args.older_than_days} days.")
+        return
+    else: 
+        print(f"{len(old_entries)} old index(es) matching {args.pattern!r} "f"older than {args.older_than_days} days:")
+        print(tabulate(old_entries, headers="keys", tablefmt="simple"))
+    
+    if not args.apply:
+        print("\nDRY-RUN: nothing deleted. Re-run with --apply to actually delete these.")
+        return
 
 def age_days(index_name: str, creation_date_ms: int) -> int:
     ## Safe with regex, as the format is kind of fix
