@@ -1,12 +1,25 @@
 import argparse
 from tabulate import tabulate
 import json
+import re
+import time
+import datetime as dt
 
 from elastic_api import es_request
 
-
 def cleanup(args):
     return
+
+def age_days(index_name: str, creation_date_ms: int) -> int:
+    ## Safe with regex, as the format is kind of fix
+    match = re.compile(r"^logs-(\d{4})\.(\d{2})\.(\d{2})$").match(index_name)
+    if match:
+        year, month, day = (int(part) for part in match.groups())
+        created_date_seconds = dt.datetime(year, month, day, tzinfo=dt.timezone.utc).timestamp()
+    else:
+        created_date_seconds = creation_date_ms / 1000
+    
+    return int((time.time() - created_date_seconds) // 86_400)
 
 def fetch_data(pattern: str):
     indices = es_request("GET", f"/_cat/indices/{pattern}", params={"format": "json","h": "index,health,docs.count,pri.store.size,creation.date"})
@@ -22,7 +35,7 @@ def fetch_data(pattern: str):
                 "health": row["health"],
                 "docs_count": row["docs.count"],
                 "primary_store_size": row["pri.store.size"],
-                "age_in_days": int(row["creation.date"]),
+                "age_in_days": age_days(name, int(row["creation.date"])),
                 "ilm_managed": ilm_info.get("managed", False)
             }
         )
