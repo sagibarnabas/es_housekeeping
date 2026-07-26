@@ -115,7 +115,7 @@ pytest tests/ -v
 - **CLI shape**: `argparse` subparsers (`report`, `cleanup`) wired via `set_defaults(func=...)`, so `main()` just calls `args.func(args)` instead of an `if/elif` chain.
 - **Dry-run safety**: `--dry-run`/`--apply` are mutually exclusive with `apply=False` as the default, and `--apply` still requires typing `yes` at a confirmation prompt (shown after the stale list) before anything is deleted.
 - **Age source**: prefers the date embedded in `logs-YYYY.MM.DD` names over `creation.date`, because this ES version silently rejects backdating `creation_date` (confirmed against the real local cluster); falls back to `creation.date` only for non-dated indices.
-- **Fixed regex over a date-finder library** for name parsing, avoids misreading an unrelated number in some future index name as a date.
+- **Fixed regex over a date-finder library** for name parsing (re library), avoids misreading an unrelated number in some future index name as a date.
 - **Age is floored, never rounded**, so a 29.9-day-old index doesn't cross a 30-day threshold early. That makes deletion logic safer.
 - **ILM status via a second call** to `/_ilm/explain` (not exposed by `_cat/indices`), merged by index name; an index missing from that response defaults to `managed: False`.
 - **`tabulate` for table output** instead of hand-rolled column alignment.
@@ -126,4 +126,5 @@ pytest tests/ -v
 - **Error handling**: catch and distinguish specific failure modes (e.g. 404 vs auth errors) and handle malformed/unexpected API responses per-index instead of one blanket `ValueError` aborting everything.
 - **Config file support**: add an optional config file (e.g. YAML).
 - **Broader date parsing for index names**: support multiple calendar/date formats in index names, not just `logs-YYYY.MM.DD`, falling back to a date-finding library when the fixed pattern doesn't match.
+- **Test cases**: I find the test suite quite complete, but fairly LLM-written. I'd spend more "manual" time on it to make it perfect.
 - **Smarter creation-date trust**: prefer the cluster's real `creation.date` when it's genuinely trustworthy.
