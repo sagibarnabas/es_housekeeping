@@ -1,11 +1,39 @@
 import argparse
+from tabulate import tabulate
+import json
+
+from elastic_api import es_request
 
 
 def cleanup(args):
     return
 
+def fetch_data(pattern: str):
+    indices = es_request("GET", f"/_cat/indices/{pattern}", params={"format": "json","h": "index,health,docs.count,pri.store.size,creation.date"})
+    ilm = es_request("GET", f"/{pattern}/_ilm/explain", params={"format": "json"})
+
+    data = []
+    for row in indices:
+        name = row["index"]
+        ilm_info = ilm.get("indices", {}).get(name, {})
+        data.append(
+            {
+                "index": name,
+                "health": row["health"],
+                "docs_count": row["docs.count"],
+                "primary_store_size": row["pri.store.size"],
+                "age_in_days": int(row["creation.date"]),
+                "ilm_managed": ilm_info.get("managed", False)
+            }
+        )
+    return data
+
 def report(args):
-    return
+    data=fetch_data(args.pattern)
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        print(tabulate(data, headers="keys", tablefmt="simple"))
 
 def main():
     p = argparse.ArgumentParser(prog="es-housekeeping")
